@@ -1,0 +1,888 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum CustomerStatus {
+  PROSPECT
+  ACTIVE
+  AT_RISK
+  CHURNED
+  INACTIVE
+}
+
+enum Channel {
+  WHATSAPP
+  EMAIL
+  LIVE_CHAT
+  PHONE_CALL
+  WEBSITE
+  SOCIAL_MEDIA
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+  INTERNAL
+}
+
+enum InteractionType {
+  MESSAGE
+  CALL
+  EMAIL
+  MEETING
+  WEBSITE_VISIT
+  SOCIAL_ENGAGEMENT
+  NOTE
+}
+
+enum SentimentLabel {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum UrgencyLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum RecommendationStatus {
+  PENDING
+  ACCEPTED
+  DISMISSED
+  EXPIRED
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum WorkflowNodeType {
+  TRIGGER
+  CUSTOMER_SEGMENT
+  CHURN_RISK_CHECK
+  SENTIMENT_CHECK
+  AI_ANALYSIS
+  CONDITION
+  SEND_NOTIFICATION
+  ASSIGN_AGENT
+  CREATE_FOLLOW_UP
+  WEBHOOK
+  END
+}
+
+enum ExecutionStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  RETRYING
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  ASSIGNMENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum PriorityLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum IntegrationStatus {
+  DISCONNECTED
+  CONFIGURING
+  CONNECTED
+  ERROR
+}
+
+enum ReportStatus {
+  QUEUED
+  GENERATING
+  READY
+  FAILED
+  EXPIRED
+}
+
+model Organization {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name            String             @db.VarChar(160)
+  slug            String             @unique @db.VarChar(100)
+  status          OrganizationStatus @default(ACTIVE)
+  timezone        String             @default("Asia/Jakarta") @db.VarChar(64)
+  defaultCurrency String             @default("IDR") @map("default_currency") @db.Char(3)
+  settings        Json               @default("{}") @db.JsonB
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime?          @map("deleted_at") @db.Timestamptz(3)
+
+  users                 User[]
+  roles                 Role[]
+  userRoles             UserRole[]
+  authSessions          AuthSession[]
+  customerSegments      CustomerSegment[]
+  customers             Customer[]
+  products              Product[]
+  transactions          CustomerTransaction[]
+  conversations         Conversation[]
+  messages              ConversationMessage[]
+  interactions          CustomerInteraction[]
+  sentimentAnalyses     SentimentAnalysis[]
+  churnPredictions      ChurnPrediction[]
+  leads                 Lead[]
+  leadScores            LeadScore[]
+  productRecommendations ProductRecommendation[]
+  workflows             Workflow[]
+  workflowExecutions    WorkflowExecution[]
+  webhookEndpoints      WebhookEndpoint[]
+  webhookDeliveries     WebhookDelivery[]
+  notifications         Notification[]
+  supportTickets        SupportTicket[]
+  integrations          Integration[]
+  reportJobs            ReportJob[]
+  auditLogs             AuditLog[]
+
+  @@index([status])
+  @@map("organizations")
+}
+
+model User {
+  id                String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String     @map("organization_id") @db.Uuid
+  email             String     @unique @db.VarChar(254)
+  passwordHash      String     @map("password_hash")
+  firstName         String     @map("first_name") @db.VarChar(80)
+  lastName          String     @map("last_name") @db.VarChar(80)
+  status            UserStatus @default(INVITED)
+  avatarUrl         String?    @map("avatar_url")
+  lastLoginAt       DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  passwordChangedAt DateTime   @default(now()) @map("password_changed_at") @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt         DateTime?  @map("deleted_at") @db.Timestamptz(3)
+
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  userRoles              UserRole[]
+  authSessions           AuthSession[]
+  assignedConversations  Conversation[]           @relation("ConversationAssignee")
+  sentMessages           ConversationMessage[]    @relation("MessageSender")
+  interactions           CustomerInteraction[]    @relation("InteractionAgent")
+  ownedLeads             Lead[]                   @relation("LeadOwner")
+  createdWorkflows       Workflow[]               @relation("WorkflowCreator")
+  triggeredExecutions    WorkflowExecution[]      @relation("ExecutionTrigger")
+  notifications          Notification[]           @relation("NotificationRecipient")
+  assignedTickets        SupportTicket[]          @relation("TicketAssignee")
+  requestedReports       ReportJob[]              @relation("ReportRequester")
+  auditLogs              AuditLog[]               @relation("AuditActor")
+
+  @@index([organizationId, status])
+  @@index([organizationId, lastName, firstName])
+  @@map("users")
+}
+
+model Role {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  code           String   @db.VarChar(64)
+  name           String   @db.VarChar(120)
+  description    String?
+  isSystem       Boolean  @default(false) @map("is_system")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization    Organization?    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@unique([organizationId, code])
+  @@index([code, isSystem])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code        String   @unique @db.VarChar(100)
+  name        String   @db.VarChar(140)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  organizationId String   @map("organization_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  roleId         String   @map("role_id") @db.Uuid
+  assignedAt     DateTime @default(now()) @map("assigned_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([organizationId, roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String @map("role_id") @db.Uuid
+  permissionId String @map("permission_id") @db.Uuid
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model AuthSession {
+  id                String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String    @map("organization_id") @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  familyId          String    @map("family_id") @db.Uuid
+  tokenHash         String    @unique @map("token_hash") @db.Char(64)
+  userAgent         String?   @map("user_agent") @db.VarChar(512)
+  ipAddress         String?   @map("ip_address") @db.Inet
+  expiresAt         DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt        DateTime? @map("last_used_at") @db.Timestamptz(3)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revocationReason  String?   @map("revocation_reason") @db.VarChar(120)
+  replacedById      String?   @unique @map("replaced_by_id") @db.Uuid
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replacedBy   AuthSession? @relation("SessionRotation", fields: [replacedById], references: [id], onDelete: SetNull)
+  replaces     AuthSession? @relation("SessionRotation")
+
+  @@index([organizationId, userId])
+  @@index([userId, familyId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model CustomerSegment {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String    @db.VarChar(120)
+  description    String?
+  rules          Json      @default("{}") @db.JsonB
+  color          String?   @db.VarChar(16)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customers    Customer[]
+
+  @@unique([organizationId, name])
+  @@map("customer_segments")
+}
+
+model Customer {
+  id                  String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String         @map("organization_id") @db.Uuid
+  segmentId           String?        @map("segment_id") @db.Uuid
+  externalId          String         @map("external_id") @db.VarChar(100)
+  fullName            String         @map("full_name") @db.VarChar(160)
+  email               String?        @db.VarChar(254)
+  phone               String?        @db.VarChar(32)
+  companyName         String?        @map("company_name") @db.VarChar(160)
+  customerType        String         @default("B2C") @map("customer_type") @db.VarChar(8)
+  status              CustomerStatus @default(PROSPECT)
+  region              String?        @db.VarChar(100)
+  preferredChannel    Channel?       @map("preferred_channel")
+  lifetimeValue       Decimal        @default(0) @map("lifetime_value") @db.Decimal(18, 2)
+  currency            String         @default("IDR") @db.Char(3)
+  currentRiskLevel    RiskLevel      @default(LOW) @map("current_risk_level")
+  consentMarketingAt  DateTime?      @map("consent_marketing_at") @db.Timestamptz(3)
+  consentProcessingAt DateTime?      @map("consent_processing_at") @db.Timestamptz(3)
+  metadata            Json           @default("{}") @db.JsonB
+  createdAt           DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt           DateTime?      @map("deleted_at") @db.Timestamptz(3)
+
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  segment                CustomerSegment?         @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  transactions           CustomerTransaction[]
+  conversations          Conversation[]
+  interactions           CustomerInteraction[]
+  churnPredictions       ChurnPrediction[]
+  leads                  Lead[]
+  productRecommendations ProductRecommendation[]
+  supportTickets         SupportTicket[]
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, status, deletedAt])
+  @@index([organizationId, currentRiskLevel])
+  @@index([organizationId, segmentId])
+  @@index([organizationId, fullName])
+  @@map("customers")
+}
+
+model Product {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  sku            String    @db.VarChar(80)
+  name           String    @db.VarChar(160)
+  description    String?
+  category       String    @db.VarChar(100)
+  price          Decimal   @db.Decimal(18, 2)
+  currency       String    @default("IDR") @db.Char(3)
+  eligibility    Json      @default("{}") @db.JsonB
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  transactions    CustomerTransaction[]
+  recommendations ProductRecommendation[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, category, isActive])
+  @@map("products")
+}
+
+model CustomerTransaction {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  customerId     String   @map("customer_id") @db.Uuid
+  productId      String?  @map("product_id") @db.Uuid
+  externalId     String?  @map("external_id") @db.VarChar(100)
+  type           String   @db.VarChar(40)
+  status         String   @db.VarChar(40)
+  amount         Decimal  @db.Decimal(18, 2)
+  currency       String   @default("IDR") @db.Char(3)
+  transactedAt   DateTime @map("transacted_at") @db.Timestamptz(3)
+  metadata       Json     @default("{}") @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, customerId, transactedAt])
+  @@index([organizationId, productId])
+  @@map("customer_transactions")
+}
+
+model Conversation {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  customerId     String             @map("customer_id") @db.Uuid
+  assignedToId   String?            @map("assigned_to_id") @db.Uuid
+  externalId     String             @map("external_id") @db.VarChar(120)
+  channel        Channel
+  status         ConversationStatus @default(OPEN)
+  subject        String?            @db.VarChar(240)
+  startedAt      DateTime           @map("started_at") @db.Timestamptz(3)
+  lastMessageAt  DateTime?          @map("last_message_at") @db.Timestamptz(3)
+  resolvedAt     DateTime?          @map("resolved_at") @db.Timestamptz(3)
+  metadata       Json               @default("{}") @db.JsonB
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt      DateTime?          @map("deleted_at") @db.Timestamptz(3)
+
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer          Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  assignedTo        User?                @relation("ConversationAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  messages          ConversationMessage[]
+  sentimentAnalyses SentimentAnalysis[]
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, customerId, lastMessageAt])
+  @@index([organizationId, status, assignedToId])
+  @@index([organizationId, channel])
+  @@map("conversations")
+}
+
+model ConversationMessage {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  senderUserId   String?          @map("sender_user_id") @db.Uuid
+  externalId     String?          @map("external_id") @db.VarChar(140)
+  direction      MessageDirection
+  content        String
+  contentType    String           @default("text") @map("content_type") @db.VarChar(40)
+  sentAt         DateTime         @map("sent_at") @db.Timestamptz(3)
+  metadata       Json             @default("{}") @db.JsonB
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  conversation      Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUser        User?               @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  sentimentAnalyses SentimentAnalysis[]
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, conversationId, sentAt])
+  @@map("conversation_messages")
+}
+
+model CustomerInteraction {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  customerId     String          @map("customer_id") @db.Uuid
+  agentId        String?         @map("agent_id") @db.Uuid
+  type           InteractionType
+  channel        Channel?
+  summary        String
+  outcome        String?         @db.VarChar(120)
+  occurredAt     DateTime        @map("occurred_at") @db.Timestamptz(3)
+  metadata       Json            @default("{}") @db.JsonB
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  agent        User?        @relation("InteractionAgent", fields: [agentId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, customerId, occurredAt])
+  @@index([organizationId, agentId, occurredAt])
+  @@map("customer_interactions")
+}
+
+model SentimentAnalysis {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String         @map("organization_id") @db.Uuid
+  conversationId    String         @map("conversation_id") @db.Uuid
+  messageId         String?        @map("message_id") @db.Uuid
+  sentiment         SentimentLabel
+  confidence        Decimal        @db.Decimal(5, 4)
+  urgency           UrgencyLevel
+  intents           Json           @default("[]") @db.JsonB
+  keyTopics         Json           @default("[]") @map("key_topics") @db.JsonB
+  riskIndicators    Json           @default("[]") @map("risk_indicators") @db.JsonB
+  summary           String?
+  recommendedResponse String?      @map("recommended_response")
+  nextAction        String?        @map("next_action")
+  provider          String         @db.VarChar(40)
+  model             String         @db.VarChar(100)
+  promptVersion     String         @map("prompt_version") @db.VarChar(40)
+  rawOutputHash     String?        @map("raw_output_hash") @db.Char(64)
+  analyzedAt        DateTime       @default(now()) @map("analyzed_at") @db.Timestamptz(3)
+
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  conversation Conversation         @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      ConversationMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, conversationId, analyzedAt])
+  @@index([organizationId, sentiment, urgency])
+  @@map("sentiment_analyses")
+}
+
+model ChurnPrediction {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String    @map("organization_id") @db.Uuid
+  customerId           String    @map("customer_id") @db.Uuid
+  score                Int
+  riskLevel            RiskLevel @map("risk_level")
+  confidence           Decimal?  @db.Decimal(5, 4)
+  modelType            String    @map("model_type") @db.VarChar(40)
+  modelVersion         String    @map("model_version") @db.VarChar(40)
+  factors              Json      @db.JsonB
+  limitations          Json      @default("[]") @db.JsonB
+  retentionStrategy    String?   @map("retention_strategy")
+  potentialRevenueLoss Decimal?  @map("potential_revenue_loss") @db.Decimal(18, 2)
+  currency             String    @default("IDR") @db.Char(3)
+  suggestedFollowUpAt  DateTime? @map("suggested_follow_up_at") @db.Timestamptz(3)
+  scoredAt             DateTime  @default(now()) @map("scored_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, customerId, scoredAt])
+  @@index([organizationId, riskLevel, scoredAt])
+  @@map("churn_predictions")
+}
+
+model Lead {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  customerId     String    @map("customer_id") @db.Uuid
+  ownerId        String?   @map("owner_id") @db.Uuid
+  title          String    @db.VarChar(180)
+  stage          LeadStage @default(NEW)
+  source         String?   @db.VarChar(100)
+  expectedValue  Decimal?  @map("expected_value") @db.Decimal(18, 2)
+  currency       String    @default("IDR") @db.Char(3)
+  expectedCloseAt DateTime? @map("expected_close_at") @db.Date
+  wonAt          DateTime? @map("won_at") @db.Timestamptz(3)
+  lostAt         DateTime? @map("lost_at") @db.Timestamptz(3)
+  lostReason     String?   @map("lost_reason")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  owner        User?        @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  scores       LeadScore[]
+
+  @@index([organizationId, stage, ownerId])
+  @@index([organizationId, customerId])
+  @@map("leads")
+}
+
+model LeadScore {
+  id                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId        String   @map("organization_id") @db.Uuid
+  leadId                String   @map("lead_id") @db.Uuid
+  score                 Int
+  classification        String   @db.VarChar(40)
+  priority              PriorityLevel
+  conversionProbability Decimal? @map("conversion_probability") @db.Decimal(5, 4)
+  isCalibrated          Boolean  @default(false) @map("is_calibrated")
+  factors               Json     @db.JsonB
+  modelVersion          String   @map("model_version") @db.VarChar(40)
+  suggestedProduct      String?  @map("suggested_product") @db.VarChar(160)
+  recommendedAction     String?  @map("recommended_action")
+  scoredAt              DateTime @default(now()) @map("scored_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, leadId, scoredAt])
+  @@index([organizationId, priority, score])
+  @@map("lead_scores")
+}
+
+model ProductRecommendation {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId  String               @map("organization_id") @db.Uuid
+  customerId      String               @map("customer_id") @db.Uuid
+  productId       String               @map("product_id") @db.Uuid
+  status          RecommendationStatus @default(PENDING)
+  reason          String
+  potentialRevenue Decimal?            @map("potential_revenue") @db.Decimal(18, 2)
+  currency        String               @default("IDR") @db.Char(3)
+  relevanceScore  Int                  @map("relevance_score")
+  eligibility     Json                 @db.JsonB
+  suggestedMessage String?             @map("suggested_message")
+  nextBestAction  String?              @map("next_best_action")
+  expiresAt       DateTime?            @map("expires_at") @db.Timestamptz(3)
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, customerId, status])
+  @@index([organizationId, relevanceScore])
+  @@map("product_recommendations")
+}
+
+model Workflow {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  createdById    String         @map("created_by_id") @db.Uuid
+  name           String         @db.VarChar(160)
+  description    String?
+  version        Int            @default(1)
+  status         WorkflowStatus @default(DRAFT)
+  triggerType    String         @map("trigger_type") @db.VarChar(80)
+  retryPolicy    Json           @default("{\"attempts\":3,\"backoffMs\":1000}") @map("retry_policy") @db.JsonB
+  activatedAt    DateTime?      @map("activated_at") @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt      DateTime?      @map("deleted_at") @db.Timestamptz(3)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  createdBy    User                @relation("WorkflowCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  nodes        WorkflowNode[]
+  edges        WorkflowEdge[]
+  executions   WorkflowExecution[]
+
+  @@unique([organizationId, name, version])
+  @@index([organizationId, status])
+  @@map("workflows")
+}
+
+model WorkflowNode {
+  id         String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId String           @map("workflow_id") @db.Uuid
+  nodeKey    String           @map("node_key") @db.VarChar(80)
+  type       WorkflowNodeType
+  name       String           @db.VarChar(120)
+  positionX  Decimal          @map("position_x") @db.Decimal(10, 2)
+  positionY  Decimal          @map("position_y") @db.Decimal(10, 2)
+  config     Json             @default("{}") @db.JsonB
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  workflow      Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  outgoingEdges WorkflowEdge[] @relation("WorkflowEdgeSource")
+  incomingEdges WorkflowEdge[] @relation("WorkflowEdgeTarget")
+
+  @@unique([workflowId, nodeKey])
+  @@map("workflow_nodes")
+}
+
+model WorkflowEdge {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workflowId   String   @map("workflow_id") @db.Uuid
+  sourceNodeId String   @map("source_node_id") @db.Uuid
+  targetNodeId String   @map("target_node_id") @db.Uuid
+  sourceHandle String?  @map("source_handle") @db.VarChar(80)
+  condition    Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  workflow   Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sourceNode WorkflowNode @relation("WorkflowEdgeSource", fields: [sourceNodeId], references: [id], onDelete: Cascade)
+  targetNode WorkflowNode @relation("WorkflowEdgeTarget", fields: [targetNodeId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, sourceNodeId])
+  @@index([workflowId, targetNodeId])
+  @@map("workflow_edges")
+}
+
+model WorkflowExecution {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  workflowId     String          @map("workflow_id") @db.Uuid
+  triggeredById  String?         @map("triggered_by_id") @db.Uuid
+  idempotencyKey String?         @map("idempotency_key") @db.VarChar(160)
+  status         ExecutionStatus @default(QUEUED)
+  input          Json            @default("{}") @db.JsonB
+  output         Json?           @db.JsonB
+  currentNodeKey String?         @map("current_node_key") @db.VarChar(80)
+  attempt        Int             @default(0)
+  errorCode      String?         @map("error_code") @db.VarChar(80)
+  errorMessage   String?         @map("error_message")
+  startedAt      DateTime?       @map("started_at") @db.Timestamptz(3)
+  finishedAt     DateTime?       @map("finished_at") @db.Timestamptz(3)
+  nextRetryAt    DateTime?       @map("next_retry_at") @db.Timestamptz(3)
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  workflow          Workflow          @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+  triggeredBy       User?             @relation("ExecutionTrigger", fields: [triggeredById], references: [id], onDelete: SetNull)
+  webhookDeliveries WebhookDelivery[]
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, status, createdAt])
+  @@index([workflowId, createdAt])
+  @@map("workflow_executions")
+}
+
+model WebhookEndpoint {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId    String   @map("organization_id") @db.Uuid
+  name              String   @db.VarChar(120)
+  url               String
+  secretEncrypted   String   @map("secret_encrypted")
+  headersEncrypted  String?  @map("headers_encrypted")
+  eventTypes        Json     @map("event_types") @db.JsonB
+  isActive          Boolean  @default(false) @map("is_active")
+  lastTestedAt      DateTime? @map("last_tested_at") @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries  WebhookDelivery[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, isActive])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId      String          @map("organization_id") @db.Uuid
+  endpointId          String          @map("endpoint_id") @db.Uuid
+  workflowExecutionId String?         @map("workflow_execution_id") @db.Uuid
+  eventType           String          @map("event_type") @db.VarChar(100)
+  status              ExecutionStatus @default(QUEUED)
+  attempt             Int             @default(0)
+  requestBodyHash     String          @map("request_body_hash") @db.Char(64)
+  responseStatus      Int?            @map("response_status")
+  responseBodyRedacted String?        @map("response_body_redacted")
+  errorMessage        String?         @map("error_message")
+  nextAttemptAt       DateTime?       @map("next_attempt_at") @db.Timestamptz(3)
+  deliveredAt         DateTime?       @map("delivered_at") @db.Timestamptz(3)
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization      Organization       @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  endpoint          WebhookEndpoint    @relation(fields: [endpointId], references: [id], onDelete: Restrict)
+  workflowExecution WorkflowExecution? @relation(fields: [workflowExecutionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status, nextAttemptAt])
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+model Notification {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  recipientId    String           @map("recipient_id") @db.Uuid
+  type           NotificationType
+  title          String           @db.VarChar(180)
+  body           String
+  actionUrl      String?          @map("action_url")
+  readAt         DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  recipient    User         @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, recipientId, readAt, createdAt])
+  @@map("notifications")
+}
+
+model SupportTicket {
+  id             String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  customerId     String        @map("customer_id") @db.Uuid
+  assignedToId   String?       @map("assigned_to_id") @db.Uuid
+  ticketNumber   String        @map("ticket_number") @db.VarChar(60)
+  subject        String        @db.VarChar(240)
+  description    String
+  status         TicketStatus  @default(OPEN)
+  priority       PriorityLevel @default(MEDIUM)
+  category       String?       @db.VarChar(100)
+  openedAt       DateTime      @default(now()) @map("opened_at") @db.Timestamptz(3)
+  resolvedAt     DateTime?     @map("resolved_at") @db.Timestamptz(3)
+  closedAt       DateTime?     @map("closed_at") @db.Timestamptz(3)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  assignedTo   User?        @relation("TicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, ticketNumber])
+  @@index([organizationId, customerId, openedAt])
+  @@index([organizationId, status, priority, assignedToId])
+  @@map("support_tickets")
+}
+
+model Integration {
+  id                   String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId       String            @map("organization_id") @db.Uuid
+  provider             String            @db.VarChar(80)
+  name                 String            @db.VarChar(120)
+  status               IntegrationStatus @default(DISCONNECTED)
+  configEncrypted      String?           @map("config_encrypted")
+  capabilities         Json              @default("[]") @db.JsonB
+  lastHealthCheckAt    DateTime?          @map("last_health_check_at") @db.Timestamptz(3)
+  lastHealthCheckError String?            @map("last_health_check_error")
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider, name])
+  @@index([organizationId, status])
+  @@map("integrations")
+}
+
+model ReportJob {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  requestedById  String       @map("requested_by_id") @db.Uuid
+  reportType     String       @map("report_type") @db.VarChar(100)
+  format         String       @db.VarChar(10)
+  filters        Json         @default("{}") @db.JsonB
+  status         ReportStatus @default(QUEUED)
+  storageKey     String?      @map("storage_key")
+  errorMessage   String?      @map("error_message")
+  expiresAt      DateTime?    @map("expires_at") @db.Timestamptz(3)
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  completedAt    DateTime?    @map("completed_at") @db.Timestamptz(3)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  requestedBy  User         @relation("ReportRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, requestedById, status, createdAt])
+  @@map("report_jobs")
+}
+
+model AuditLog {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String?  @map("organization_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String   @db.VarChar(120)
+  resourceType   String   @map("resource_type") @db.VarChar(100)
+  resourceId     String?  @map("resource_id") @db.VarChar(100)
+  requestId      String?  @map("request_id") @db.VarChar(100)
+  ipAddress      String?  @map("ip_address") @db.Inet
+  userAgent      String?  @map("user_agent") @db.VarChar(512)
+  changes        Json?    @db.JsonB
+  metadata       Json     @default("{}") @db.JsonB
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor        User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, actorUserId, createdAt])
+  @@index([organizationId, resourceType, resourceId])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}

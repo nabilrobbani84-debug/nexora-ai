@@ -1,0 +1,11 @@
+{
+  "extends": "@nexora/config/typescript/node.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist",
+    "noEmit": true,
+    "customConditions": ["development"],
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts", "prisma.config.ts", "tests/**/*.ts"]
+}
